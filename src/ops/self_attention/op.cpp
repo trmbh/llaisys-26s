@@ -1,6 +1,9 @@
 #include "op.hpp"
 
 #include "../cpu_utils.hpp"
+#ifdef ENABLE_NVIDIA_API
+#include "../nvidia/ops_cuda.cuh"
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -16,6 +19,12 @@ void self_attention(tensor_t attn_val, tensor_t q, tensor_t k, tensor_t v, float
     CHECK_ARGUMENT(q->shape()[1] % k->shape()[1] == 0, "query heads must be a multiple of kv heads");
     CHECK_SAME_DTYPE(attn_val->dtype(), q->dtype(), k->dtype(), v->dtype());
     ASSERT(attn_val->isContiguous() && q->isContiguous() && k->isContiguous() && v->isContiguous(), "self_attention tensors must be contiguous");
+    if (attn_val->deviceType() == LLAISYS_DEVICE_NVIDIA) {
+#ifdef ENABLE_NVIDIA_API
+        nvidia::self_attention(attn_val->data(), q->data(), k->data(), v->data(), attn_val->dtype(), q->shape()[0], q->shape()[1], k->shape()[0], k->shape()[1], q->shape()[2], scale);
+        return;
+#endif
+    }
     if (attn_val->deviceType() != LLAISYS_DEVICE_CPU) {
         auto out_cpu = Tensor::create(attn_val->shape(), attn_val->dtype());
         self_attention(out_cpu, q->to(LLAISYS_DEVICE_CPU), k->to(LLAISYS_DEVICE_CPU), v->to(LLAISYS_DEVICE_CPU), scale);
@@ -51,3 +60,4 @@ void self_attention(tensor_t attn_val, tensor_t q, tensor_t k, tensor_t v, float
     });
 }
 } // namespace llaisys::ops
+
