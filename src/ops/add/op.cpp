@@ -18,6 +18,14 @@ void add(tensor_t c, tensor_t a, tensor_t b) {
         return cpu::add(c->data(), a->data(), b->data(), c->dtype(), c->numel());
     }
 
+    auto c_cpu = Tensor::create(c->shape(), c->dtype());
+    add(c_cpu, a->to(LLAISYS_DEVICE_CPU), b->to(LLAISYS_DEVICE_CPU));
+    auto converted = c_cpu->to(c->deviceType(), c->deviceId());
+    llaisys::core::context().setDevice(c->deviceType(), c->deviceId());
+    llaisys::core::context().runtime().api()->memcpy_sync(
+        c->data(), converted->data(), c->numel() * c->elementSize(), LLAISYS_MEMCPY_D2D);
+    return;
+
     llaisys::core::context().setDevice(c->deviceType(), c->deviceId());
 
     switch (c->deviceType()) {
