@@ -1,6 +1,9 @@
 #include "op.hpp"
 
 #include "../cpu_utils.hpp"
+#ifdef ENABLE_NVIDIA_API
+#include "../nvidia/ops_cuda.cuh"
+#endif
 
 #include <cmath>
 
@@ -12,6 +15,12 @@ void rope(tensor_t out, tensor_t in, tensor_t pos_ids, float theta) {
     CHECK_ARGUMENT(pos_ids->ndim() == 1 && pos_ids->shape()[0] == in->shape()[0] && pos_ids->dtype() == LLAISYS_DTYPE_I64, "invalid rope positions");
     CHECK_SAME_DTYPE(out->dtype(), in->dtype());
     ASSERT(out->isContiguous() && in->isContiguous() && pos_ids->isContiguous(), "rope tensors must be contiguous");
+    if (out->deviceType() == LLAISYS_DEVICE_NVIDIA) {
+#ifdef ENABLE_NVIDIA_API
+        nvidia::rope(out->data(), in->data(), reinterpret_cast<const int64_t *>(pos_ids->data()), out->dtype(), in->shape()[0], in->shape()[1], in->shape()[2], theta);
+        return;
+#endif
+    }
     if (out->deviceType() != LLAISYS_DEVICE_CPU) {
         auto out_cpu = Tensor::create(out->shape(), out->dtype());
         rope(out_cpu, in->to(LLAISYS_DEVICE_CPU), pos_ids->to(LLAISYS_DEVICE_CPU), theta);
@@ -36,3 +45,4 @@ void rope(tensor_t out, tensor_t in, tensor_t pos_ids, float theta) {
     });
 }
 } // namespace llaisys::ops
+
