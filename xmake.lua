@@ -108,6 +108,9 @@ target("llaisys")
 
     set_languages("cxx17")
     set_warnings("all", "error")
+    if has_config("nv-gpu") then
+        add_rules("cuda")
+    end
     add_files("src/llaisys/*.cc")
     set_installdir(".")
 
