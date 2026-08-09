@@ -1,6 +1,9 @@
 #include "op.hpp"
 
 #include "../cpu_utils.hpp"
+#ifdef ENABLE_NVIDIA_API
+#include "../nvidia/ops_cuda.cuh"
+#endif
 
 #include <algorithm>
 
@@ -12,6 +15,12 @@ void embedding(tensor_t out, tensor_t index, tensor_t weight) {
     const std::vector<size_t> expected_shape{index->shape()[0], weight->shape()[1]};
     CHECK_ARGUMENT(out->shape() == expected_shape, "embedding output shape mismatch");
     ASSERT(out->isContiguous() && index->isContiguous() && weight->isContiguous(), "embedding tensors must be contiguous");
+    if (out->deviceType() == LLAISYS_DEVICE_NVIDIA) {
+#ifdef ENABLE_NVIDIA_API
+        nvidia::embedding(out->data(), reinterpret_cast<const int64_t *>(index->data()), weight->data(), out->dtype(), index->numel(), weight->shape()[1]);
+        return;
+#endif
+    }
     if (out->deviceType() != LLAISYS_DEVICE_CPU) {
         auto out_cpu = Tensor::create(out->shape(), out->dtype());
         embedding(out_cpu, index->to(LLAISYS_DEVICE_CPU), weight->to(LLAISYS_DEVICE_CPU));
@@ -30,3 +39,4 @@ void embedding(tensor_t out, tensor_t index, tensor_t weight) {
     });
 }
 } // namespace llaisys::ops
+
