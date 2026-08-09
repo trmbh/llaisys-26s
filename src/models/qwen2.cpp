@@ -5,6 +5,7 @@
 #include "../ops/argmax/op.hpp"
 #include "../ops/embedding/op.hpp"
 #include "../ops/linear/op.hpp"
+#include "../ops/rearrange/op.hpp"
 #include "../ops/rms_norm/op.hpp"
 #include "../ops/rope/op.hpp"
 #include "../ops/self_attention/op.hpp"
@@ -21,6 +22,10 @@ struct LlaisysQwen2Model {
     llaisysDeviceType_t device = LLAISYS_DEVICE_CPU;
     int device_id = 0;
     LlaisysQwen2Weights weights{};
+    size_t cache_len = 0;
+    size_t cache_capacity = 0;
+    std::vector<llaisys::tensor_t> key_cache;
+    std::vector<llaisys::tensor_t> value_cache;
 
     explicit LlaisysQwen2Model(const LlaisysQwen2Meta &m, llaisysDeviceType_t d, int id)
         : meta(m), device(d), device_id(id) {
@@ -41,6 +46,15 @@ struct LlaisysQwen2Model {
         weights.mlp_up_b = new llaisysTensor_t[n]{};
         weights.mlp_down_w = new llaisysTensor_t[n]{};
         weights.mlp_down_b = new llaisysTensor_t[n]{};
+        // The assignment uses short chat prompts. Avoid reserving the full 131k-token
+        // model context up front while retaining a useful, bounded KV cache.
+        cache_capacity = std::min(meta.maxseq, size_t(4096));
+        key_cache.reserve(n);
+        value_cache.reserve(n);
+        for (size_t i = 0; i < n; ++i) {
+            key_cache.push_back(llaisys::Tensor::create({cache_capacity, meta.nkvh, meta.dh}, meta.dtype, device, device_id));
+            value_cache.push_back(llaisys::Tensor::create({cache_capacity, meta.nkvh, meta.dh}, meta.dtype, device, device_id));
+        }
     }
 
     ~LlaisysQwen2Model() {
@@ -102,9 +116,14 @@ __C {
         return &model->weights;
     }
 
+    void llaisysQwen2ModelClearCache(LlaisysQwen2Model *model) {
+        model->cache_len = 0;
+    }
+
     int64_t llaisysQwen2ModelInfer(LlaisysQwen2Model *model, int64_t *token_ids, size_t ntoken) {
         CHECK_ARGUMENT(model != nullptr && token_ids != nullptr && ntoken > 0, "invalid Qwen2 inference input");
         const auto &m = model->meta;
+        CHECK_ARGUMENT(model->cache_len + ntoken <= model->cache_capacity, "Qwen2 KV cache capacity exceeded");
         const auto dtype = m.dtype;
         const auto dev = model->device;
         const int did = model->device_id;
@@ -114,7 +133,7 @@ __C {
         ops::embedding(hidden, ids, model->weights.in_embed->tensor);
         auto pos = make_tensor({ntoken}, LLAISYS_DTYPE_I64, dev, did);
         std::vector<int64_t> positions(ntoken);
-        for (size_t i = 0; i < ntoken; ++i) positions[i] = static_cast<int64_t>(i);
+        for (size_t i = 0; i < ntoken; ++i) positions[i] = static_cast<int64_t>(model->cache_len + i);
         pos->load(positions.data());
 
         const std::vector<size_t> qshape{ntoken, m.nh, m.dh};
@@ -136,8 +155,14 @@ __C {
             auto krot = make_tensor(kvshape, dtype, dev, did);
             ops::rope(qrot, q, pos, m.theta);
             ops::rope(krot, k, pos, m.theta);
+            auto key_slot = model->key_cache[layer]->slice(0, model->cache_len, model->cache_len + ntoken);
+            auto value_slot = model->value_cache[layer]->slice(0, model->cache_len, model->cache_len + ntoken);
+            ops::rearrange(key_slot, krot);
+            ops::rearrange(value_slot, v);
+            auto keys = model->key_cache[layer]->slice(0, 0, model->cache_len + ntoken);
+            auto values = model->value_cache[layer]->slice(0, 0, model->cache_len + ntoken);
             auto attn = make_tensor(qshape, dtype, dev, did);
-            ops::self_attention(attn, qrot, krot, v, scale);
+            ops::self_attention(attn, qrot, keys, values, scale);
             auto attn2 = attn->view({ntoken, m.hs});
             auto proj = make_tensor({ntoken, m.hs}, dtype, dev, did);
             ops::linear(proj, attn2, model->weights.attn_o_w[layer]->tensor,
@@ -169,6 +194,7 @@ __C {
         auto val = make_tensor({1}, dtype, dev, did);
         ops::argmax(idx, val, last);
         auto idx_cpu = idx->to(LLAISYS_DEVICE_CPU);
+        model->cache_len += ntoken;
         return reinterpret_cast<const int64_t *>(idx_cpu->data())[0];
     }
 }
