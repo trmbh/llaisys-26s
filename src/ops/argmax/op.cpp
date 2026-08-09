@@ -2,6 +2,9 @@
 
 #include "../../utils.hpp"
 #include "../cpu_utils.hpp"
+#ifdef ENABLE_NVIDIA_API
+#include "../nvidia/ops_cuda.cuh"
+#endif
 
 #include <limits>
 
@@ -11,6 +14,12 @@ void argmax(tensor_t max_idx, tensor_t max_val, tensor_t vals) {
     CHECK_ARGUMENT(vals->ndim() == 1 && max_idx->numel() == 1 && max_val->numel() == 1, "argmax expects a 1D input and scalar outputs");
     CHECK_ARGUMENT(max_idx->dtype() == LLAISYS_DTYPE_I64, "argmax index output must be int64");
     ASSERT(vals->isContiguous() && max_idx->isContiguous() && max_val->isContiguous(), "argmax tensors must be contiguous");
+    if (vals->deviceType() == LLAISYS_DEVICE_NVIDIA) {
+#ifdef ENABLE_NVIDIA_API
+        nvidia::argmax(reinterpret_cast<int64_t *>(max_idx->data()), max_val->data(), vals->data(), vals->dtype(), vals->numel());
+        return;
+#endif
+    }
     if (vals->deviceType() != LLAISYS_DEVICE_CPU) {
         auto vals_cpu = vals->to(LLAISYS_DEVICE_CPU);
         auto idx_cpu = max_idx->to(LLAISYS_DEVICE_CPU);
@@ -35,3 +44,4 @@ void argmax(tensor_t max_idx, tensor_t max_val, tensor_t vals) {
     });
 }
 } // namespace llaisys::ops
+
