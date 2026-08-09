@@ -11,7 +11,12 @@ void rms_norm(tensor_t out, tensor_t in, tensor_t weight, float eps) {
     CHECK_SAME_SHAPE(out->shape(), in->shape());
     CHECK_SAME_DTYPE(out->dtype(), in->dtype(), weight->dtype());
     ASSERT(out->isContiguous() && in->isContiguous() && weight->isContiguous(), "rms_norm tensors must be contiguous");
-    if (out->deviceType() != LLAISYS_DEVICE_CPU) EXCEPTION_UNSUPPORTED_DEVICE;
+    if (out->deviceType() != LLAISYS_DEVICE_CPU) {
+        auto out_cpu = Tensor::create(out->shape(), out->dtype());
+        rms_norm(out_cpu, in->to(LLAISYS_DEVICE_CPU), weight->to(LLAISYS_DEVICE_CPU), eps);
+        detail::copy_from_cpu(out, out_cpu);
+        return;
+    }
     const size_t hidden = in->shape().back(), rows = in->numel() / hidden;
     LLAISYS_DISPATCH_FLOAT(out->dtype(), {
         const auto *x = reinterpret_cast<const scalar_t *>(in->data());
