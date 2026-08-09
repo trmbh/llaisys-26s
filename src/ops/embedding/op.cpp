@@ -12,7 +12,12 @@ void embedding(tensor_t out, tensor_t index, tensor_t weight) {
     const std::vector<size_t> expected_shape{index->shape()[0], weight->shape()[1]};
     CHECK_ARGUMENT(out->shape() == expected_shape, "embedding output shape mismatch");
     ASSERT(out->isContiguous() && index->isContiguous() && weight->isContiguous(), "embedding tensors must be contiguous");
-    if (out->deviceType() != LLAISYS_DEVICE_CPU) EXCEPTION_UNSUPPORTED_DEVICE;
+    if (out->deviceType() != LLAISYS_DEVICE_CPU) {
+        auto out_cpu = Tensor::create(out->shape(), out->dtype());
+        embedding(out_cpu, index->to(LLAISYS_DEVICE_CPU), weight->to(LLAISYS_DEVICE_CPU));
+        detail::copy_from_cpu(out, out_cpu);
+        return;
+    }
     const auto *indices = reinterpret_cast<const int64_t *>(index->data());
     LLAISYS_DISPATCH_FLOAT(weight->dtype(), {
         const auto *table = reinterpret_cast<const scalar_t *>(weight->data());
