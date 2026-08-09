@@ -112,6 +112,7 @@ target("llaisys")
         add_rules("cuda")
     end
     add_files("src/llaisys/*.cc")
+    add_files("src/models/*.cpp")
     set_installdir(".")
 
     
@@ -126,3 +127,4 @@ target("llaisys")
         end
     end)
 target_end()
+
