@@ -10,7 +10,12 @@ void swiglu(tensor_t out, tensor_t gate, tensor_t up) {
     CHECK_SAME_SHAPE(out->shape(), gate->shape(), up->shape());
     CHECK_SAME_DTYPE(out->dtype(), gate->dtype(), up->dtype());
     ASSERT(out->isContiguous() && gate->isContiguous() && up->isContiguous(), "swiglu tensors must be contiguous");
-    if (out->deviceType() != LLAISYS_DEVICE_CPU) EXCEPTION_UNSUPPORTED_DEVICE;
+    if (out->deviceType() != LLAISYS_DEVICE_CPU) {
+        auto out_cpu = Tensor::create(out->shape(), out->dtype());
+        swiglu(out_cpu, gate->to(LLAISYS_DEVICE_CPU), up->to(LLAISYS_DEVICE_CPU));
+        detail::copy_from_cpu(out, out_cpu);
+        return;
+    }
     LLAISYS_DISPATCH_FLOAT(out->dtype(), {
         const auto *g = reinterpret_cast<const scalar_t *>(gate->data());
         const auto *u = reinterpret_cast<const scalar_t *>(up->data());
