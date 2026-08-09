@@ -3,13 +3,19 @@ from ..libllaisys import LIB_LLAISYS
 from ..libllaisys import DeviceType
 
 from pathlib import Path
-import safetensors
+try:
+    import safetensors
+except ImportError:  # Optional until model inference is requested.
+    safetensors = None
 
 
 class Qwen2:
 
     def __init__(self, model_path, device: DeviceType = DeviceType.CPU):
         # TODO: Implement model constructor
+
+        if safetensors is None:
+            raise ImportError("Qwen2 inference requires the optional 'safetensors' package")
 
         model_path = Path(model_path)
 
