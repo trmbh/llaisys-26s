@@ -13,7 +13,12 @@ void linear(tensor_t out, tensor_t in, tensor_t weight, tensor_t bias) {
     CHECK_ARGUMENT(out->shape() == expected_shape, "linear output shape mismatch");
     CHECK_SAME_DTYPE(out->dtype(), in->dtype(), weight->dtype(), bias->dtype());
     ASSERT(out->isContiguous() && in->isContiguous() && weight->isContiguous() && bias->isContiguous(), "linear tensors must be contiguous");
-    if (out->deviceType() != LLAISYS_DEVICE_CPU) EXCEPTION_UNSUPPORTED_DEVICE;
+    if (out->deviceType() != LLAISYS_DEVICE_CPU) {
+        auto out_cpu = Tensor::create(out->shape(), out->dtype());
+        linear(out_cpu, in->to(LLAISYS_DEVICE_CPU), weight->to(LLAISYS_DEVICE_CPU), bias->to(LLAISYS_DEVICE_CPU));
+        detail::copy_from_cpu(out, out_cpu);
+        return;
+    }
     const size_t m = in->shape()[0], k = in->shape()[1], n = weight->shape()[0];
     LLAISYS_DISPATCH_FLOAT(out->dtype(), {
         const auto *x = reinterpret_cast<const scalar_t *>(in->data());
