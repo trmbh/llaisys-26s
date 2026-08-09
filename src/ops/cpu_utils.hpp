@@ -1,11 +1,19 @@
 #pragma once
 
+#include "../tensor/tensor.hpp"
 #include "../utils.hpp"
 
 #include <cmath>
 #include <cstddef>
 
 namespace llaisys::ops::detail {
+
+inline void copy_from_cpu(const tensor_t &dst, const tensor_t &src) {
+    auto converted = src->to(dst->deviceType(), dst->deviceId());
+    core::context().setDevice(dst->deviceType(), dst->deviceId());
+    const auto kind = dst->deviceType() == LLAISYS_DEVICE_CPU ? LLAISYS_MEMCPY_H2H : LLAISYS_MEMCPY_D2D;
+    core::context().runtime().api()->memcpy_sync(dst->data(), converted->data(), dst->numel() * dst->elementSize(), kind);
+}
 
 template <typename T>
 inline float read_float(const T &value) {
