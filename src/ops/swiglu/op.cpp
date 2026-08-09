@@ -1,6 +1,9 @@
 #include "op.hpp"
 
 #include "../cpu_utils.hpp"
+#ifdef ENABLE_NVIDIA_API
+#include "../nvidia/ops_cuda.cuh"
+#endif
 
 #include <cmath>
 
@@ -10,6 +13,12 @@ void swiglu(tensor_t out, tensor_t gate, tensor_t up) {
     CHECK_SAME_SHAPE(out->shape(), gate->shape(), up->shape());
     CHECK_SAME_DTYPE(out->dtype(), gate->dtype(), up->dtype());
     ASSERT(out->isContiguous() && gate->isContiguous() && up->isContiguous(), "swiglu tensors must be contiguous");
+    if (out->deviceType() == LLAISYS_DEVICE_NVIDIA) {
+#ifdef ENABLE_NVIDIA_API
+        nvidia::swiglu(out->data(), gate->data(), up->data(), out->dtype(), out->numel());
+        return;
+#endif
+    }
     if (out->deviceType() != LLAISYS_DEVICE_CPU) {
         auto out_cpu = Tensor::create(out->shape(), out->dtype());
         swiglu(out_cpu, gate->to(LLAISYS_DEVICE_CPU), up->to(LLAISYS_DEVICE_CPU));
@@ -27,3 +36,4 @@ void swiglu(tensor_t out, tensor_t gate, tensor_t up) {
     });
 }
 } // namespace llaisys::ops
+
