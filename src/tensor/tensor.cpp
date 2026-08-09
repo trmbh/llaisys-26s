@@ -256,15 +256,20 @@ tensor_t Tensor::to(llaisysDeviceType_t device_type, int device) const {
         device = deviceType() == device_type ? deviceId() : 0;
     }
     auto src = isContiguous() ? std::shared_ptr<const Tensor>(this, [](const Tensor *) {}) : std::shared_ptr<const Tensor>(contiguous());
-    auto out = create(_meta.shape, _meta.dtype, device_type, device);
     core::context().setDevice(device_type, device);
-    auto *api = core::context().runtime().api();
+    auto out = create(_meta.shape, _meta.dtype, device_type, device);
     llaisysMemcpyKind_t kind;
     if (deviceType() == LLAISYS_DEVICE_CPU && device_type == LLAISYS_DEVICE_CPU) kind = LLAISYS_MEMCPY_H2H;
     else if (deviceType() == LLAISYS_DEVICE_CPU) kind = LLAISYS_MEMCPY_H2D;
     else if (device_type == LLAISYS_DEVICE_CPU) kind = LLAISYS_MEMCPY_D2H;
     else kind = LLAISYS_MEMCPY_D2D;
-    api->memcpy_sync(out->data(), src->data(), numel() * elementSize(), kind);
+    // CUDA copies must execute in the context that owns the device pointer.
+    if (kind == LLAISYS_MEMCPY_D2H) {
+        core::context().setDevice(deviceType(), deviceId());
+    } else {
+        core::context().setDevice(device_type, device);
+    }
+    core::context().runtime().api()->memcpy_sync(out->data(), src->data(), numel() * elementSize(), kind);
     return out;
 }
 
