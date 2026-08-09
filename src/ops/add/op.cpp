@@ -4,6 +4,9 @@
 #include "../../utils.hpp"
 
 #include "cpu/add_cpu.hpp"
+#ifdef ENABLE_NVIDIA_API
+#include "../nvidia/ops_cuda.cuh"
+#endif
 
 namespace llaisys::ops {
 void add(tensor_t c, tensor_t a, tensor_t b) {
@@ -18,6 +21,12 @@ void add(tensor_t c, tensor_t a, tensor_t b) {
         return cpu::add(c->data(), a->data(), b->data(), c->dtype(), c->numel());
     }
 
+    if (c->deviceType() == LLAISYS_DEVICE_NVIDIA) {
+#ifdef ENABLE_NVIDIA_API
+        nvidia::add(c->data(), a->data(), b->data(), c->dtype(), c->numel());
+        return;
+#endif
+    }
     auto c_cpu = Tensor::create(c->shape(), c->dtype());
     add(c_cpu, a->to(LLAISYS_DEVICE_CPU), b->to(LLAISYS_DEVICE_CPU));
     auto converted = c_cpu->to(c->deviceType(), c->deviceId());
@@ -41,3 +50,4 @@ void add(tensor_t c, tensor_t a, tensor_t b) {
     }
 }
 } // namespace llaisys::ops
+
