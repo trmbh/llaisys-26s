@@ -1,0 +1,8 @@
+target("llaisys-device-nvidia")
+    set_kind("static")
+    set_languages("cxx17")
+    add_rules("cuda")
+    add_files("../src/device/nvidia/*.cu")
+    add_cugencodes("native")
+    on_install(function (target) end)
+target_end()
