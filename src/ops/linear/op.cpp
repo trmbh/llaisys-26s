@@ -1,6 +1,9 @@
 #include "op.hpp"
 
 #include "../cpu_utils.hpp"
+#ifdef ENABLE_NVIDIA_API
+#include "../nvidia/ops_cuda.cuh"
+#endif
 
 #include <algorithm>
 
@@ -13,6 +16,12 @@ void linear(tensor_t out, tensor_t in, tensor_t weight, tensor_t bias) {
     CHECK_ARGUMENT(out->shape() == expected_shape, "linear output shape mismatch");
     CHECK_SAME_DTYPE(out->dtype(), in->dtype(), weight->dtype(), bias->dtype());
     ASSERT(out->isContiguous() && in->isContiguous() && weight->isContiguous() && bias->isContiguous(), "linear tensors must be contiguous");
+    if (out->deviceType() == LLAISYS_DEVICE_NVIDIA) {
+#ifdef ENABLE_NVIDIA_API
+        nvidia::linear(out->data(), in->data(), weight->data(), bias->data(), out->dtype(), in->shape()[0], in->shape()[1], weight->shape()[0]);
+        return;
+#endif
+    }
     if (out->deviceType() != LLAISYS_DEVICE_CPU) {
         auto out_cpu = Tensor::create(out->shape(), out->dtype());
         linear(out_cpu, in->to(LLAISYS_DEVICE_CPU), weight->to(LLAISYS_DEVICE_CPU), bias->to(LLAISYS_DEVICE_CPU));
@@ -33,3 +42,4 @@ void linear(tensor_t out, tensor_t in, tensor_t weight, tensor_t bias) {
     });
 }
 } // namespace llaisys::ops
+
