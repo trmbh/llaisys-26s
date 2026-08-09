@@ -23,10 +23,14 @@ __C {
         llaisysTensor_t *attn_v_w;
         llaisysTensor_t *attn_v_b;
         llaisysTensor_t *attn_o_w;
+        llaisysTensor_t *attn_o_b;
         llaisysTensor_t *mlp_norm_w; // a.k.a. post_attention_layernorm.weight
         llaisysTensor_t *mlp_gate_w;
+        llaisysTensor_t *mlp_gate_b;
         llaisysTensor_t *mlp_up_w;
+        llaisysTensor_t *mlp_up_b;
         llaisysTensor_t *mlp_down_w;
+        llaisysTensor_t *mlp_down_b;
     };
 
     struct LlaisysQwen2Model;
@@ -40,3 +44,4 @@ __C {
     __export int64_t llaisysQwen2ModelInfer(struct LlaisysQwen2Model * model, int64_t * token_ids, size_t ntoken);
 }
 #endif // LLAISYS_MODELS_QWEN2_H
+
