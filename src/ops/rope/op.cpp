@@ -12,7 +12,12 @@ void rope(tensor_t out, tensor_t in, tensor_t pos_ids, float theta) {
     CHECK_ARGUMENT(pos_ids->ndim() == 1 && pos_ids->shape()[0] == in->shape()[0] && pos_ids->dtype() == LLAISYS_DTYPE_I64, "invalid rope positions");
     CHECK_SAME_DTYPE(out->dtype(), in->dtype());
     ASSERT(out->isContiguous() && in->isContiguous() && pos_ids->isContiguous(), "rope tensors must be contiguous");
-    if (out->deviceType() != LLAISYS_DEVICE_CPU) EXCEPTION_UNSUPPORTED_DEVICE;
+    if (out->deviceType() != LLAISYS_DEVICE_CPU) {
+        auto out_cpu = Tensor::create(out->shape(), out->dtype());
+        rope(out_cpu, in->to(LLAISYS_DEVICE_CPU), pos_ids->to(LLAISYS_DEVICE_CPU), theta);
+        detail::copy_from_cpu(out, out_cpu);
+        return;
+    }
     const auto *positions = reinterpret_cast<const int64_t *>(pos_ids->data());
     const size_t seq = in->shape()[0], heads = in->shape()[1], dim = in->shape()[2], half = dim / 2;
     LLAISYS_DISPATCH_FLOAT(out->dtype(), {
