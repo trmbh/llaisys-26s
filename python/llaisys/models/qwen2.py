@@ -45,6 +45,8 @@ LIB_LLAISYS.llaisysQwen2ModelDestroy.argtypes = [c_void_p]
 LIB_LLAISYS.llaisysQwen2ModelDestroy.restype = None
 LIB_LLAISYS.llaisysQwen2ModelWeights.argtypes = [c_void_p]
 LIB_LLAISYS.llaisysQwen2ModelWeights.restype = POINTER(_Weights)
+LIB_LLAISYS.llaisysQwen2ModelClearCache.argtypes = [c_void_p]
+LIB_LLAISYS.llaisysQwen2ModelClearCache.restype = None
 LIB_LLAISYS.llaisysQwen2ModelInfer.argtypes = [c_void_p, POINTER(c_int64), c_size_t]
 LIB_LLAISYS.llaisysQwen2ModelInfer.restype = c_int64
 
@@ -167,12 +169,17 @@ class Qwen2:
         del top_k, top_p, temperature  # Native implementation currently uses greedy argmax.
         tokens = [int(x) for x in inputs]
         steps = 128 if max_new_tokens is None else int(max_new_tokens)
+        if not tokens or steps <= 0:
+            return tokens
+        LIB_LLAISYS.llaisysQwen2ModelClearCache(self._model)
+        ids = (c_int64 * len(tokens))(*tokens)
+        next_token = int(LIB_LLAISYS.llaisysQwen2ModelInfer(self._model, ids, len(tokens)))
         for _ in range(max(0, steps)):
-            ids = (c_int64 * len(tokens))(*tokens)
-            next_token = int(LIB_LLAISYS.llaisysQwen2ModelInfer(self._model, ids, len(tokens)))
             tokens.append(next_token)
             if next_token == self._end_token:
                 break
+            ids = (c_int64 * 1)(next_token)
+            next_token = int(LIB_LLAISYS.llaisysQwen2ModelInfer(self._model, ids, 1))
         return tokens
 
     def __del__(self):
