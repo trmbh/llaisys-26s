@@ -78,7 +78,9 @@ class Qwen2:
         kv_heads = int(config.get("num_key_value_heads", heads))
         head_dim = int(config.get("head_dim", hidden // heads))
         torch_dtype = str(config.get("torch_dtype", "bfloat16")).lower()
-        if "float32" in torch_dtype:
+        if "bfloat16" in torch_dtype or "bf16" in torch_dtype:
+            self._dtype = DataType.BF16
+        elif "float32" in torch_dtype:
             self._dtype = DataType.F32
         elif "float16" in torch_dtype:
             self._dtype = DataType.F16
@@ -106,11 +108,6 @@ class Qwen2:
             for name, array, file_dtype in self._iter_safetensors(file):
                 actual_dtype = DataType.BF16 if file_dtype == "BF16" else _dtype_for_array(array)
                 if actual_dtype != self._dtype:
-                    if self._dtype == DataType.F32:
-                        array = array.astype(np.float32)
-                    elif self._dtype == DataType.F16:
-                        array = array.astype(np.float16)
-                else:
                     raise TypeError(f"Weight {name} has {file_dtype}, expected bfloat16")
                 tensors[name] = self._load_tensor(array)
         self._assign_weights(tensors, hidden, heads, kv_heads, head_dim)
@@ -211,4 +208,3 @@ class Qwen2:
         if model:
             LIB_LLAISYS.llaisysQwen2ModelDestroy(model)
             self._model = None
-
