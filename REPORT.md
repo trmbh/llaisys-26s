@@ -30,5 +30,5 @@ PYTHONPATH=$PWD/python python test/test_infer.py --model /path/to/DeepSeek-R1-Di
 | CPU | Supported | Native Qwen2 synthetic-model generation passed. |
 | NVIDIA CUDA | Supported | `test/test_runtime.py --device nvidia` passed on an RTX 5070 Ti Laptop GPU. Native CUDA operator smoke tests matched PyTorch, synthetic Qwen2 generation matched the CPU result, and the real 3.55 GB DeepSeek checkpoint loaded 339 tensors and completed single-token inference. |
 
-The full 1.5B checkpoint comparison should be run with the checkpoint available locally. It was not included in this environment because WSL network access to Hugging Face was unavailable during validation.
+The checkpoint is available locally at `F:\\Codex\\2026-08-09\\nin\\work\\DeepSeek-R1-Distill-Qwen-1.5B`. A one-token NVIDIA comparison was run: Transformers produced token `91786`, while the native path produced `0`; the end-to-end inference task therefore remains unresolved.
 
