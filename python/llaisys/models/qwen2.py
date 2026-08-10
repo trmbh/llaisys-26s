@@ -1,6 +1,7 @@
 from ctypes import (POINTER, Structure, c_float, c_int, c_int64, c_size_t,
                     c_void_p)
 import json
+import struct
 from pathlib import Path
 from typing import Sequence
 
@@ -102,20 +103,43 @@ class Qwen2:
 
         tensors = {}
         for file in sorted(model_path.glob("*.safetensors")):
-            with safe_open(file, framework="numpy", device="cpu") as data:
-                for name in data.keys():
-                    array = np.ascontiguousarray(data.get_tensor(name))
-                    actual_dtype = _dtype_for_array(array)
-                    if actual_dtype != self._dtype:
-                        if self._dtype == DataType.F32:
-                            array = array.astype(np.float32)
-                        elif self._dtype == DataType.F16:
-                            array = array.astype(np.float16)
-                        else:
-                            raise TypeError(f"Weight {name} has {array.dtype}, expected bfloat16")
-                    tensors[name] = self._load_tensor(array)
-
+            for name, array, file_dtype in self._iter_safetensors(file):
+                actual_dtype = DataType.BF16 if file_dtype == "BF16" else _dtype_for_array(array)
+                if actual_dtype != self._dtype:
+                    if self._dtype == DataType.F32:
+                        array = array.astype(np.float32)
+                    elif self._dtype == DataType.F16:
+                        array = array.astype(np.float16)
+                else:
+                    raise TypeError(f"Weight {name} has {file_dtype}, expected bfloat16")
+                tensors[name] = self._load_tensor(array)
         self._assign_weights(tensors, hidden, heads, kv_heads, head_dim)
+
+    @staticmethod
+    def _iter_safetensors(file):
+        """Read tensor bytes directly so BF16 works without NumPy bfloat16 support."""
+        with file.open("rb") as stream:
+            header_size = struct.unpack("<Q", stream.read(8))[0]
+            header = json.loads(stream.read(header_size))
+            data_start = 8 + header_size
+            for name, info in header.items():
+                if name == "__metadata__":
+                    continue
+                dtype = info["dtype"]
+                start, end = info["data_offsets"]
+                stream.seek(data_start + start)
+                raw = stream.read(end - start)
+                if dtype == "BF16":
+                    array = np.frombuffer(raw, dtype=np.uint16).reshape(info["shape"])
+                elif dtype == "F16":
+                    array = np.frombuffer(raw, dtype=np.float16).reshape(info["shape"])
+                elif dtype == "F32":
+                    array = np.frombuffer(raw, dtype=np.float32).reshape(info["shape"])
+                else:
+                    raise TypeError(f"Unsupported safetensors dtype: {dtype}")
+                yield name, np.ascontiguousarray(array), dtype
+
+        
 
     def _load_tensor(self, array):
         dtype = self._dtype
