@@ -39,7 +39,12 @@ __device__ float load(const std::byte *p, llaisysDataType_t type, size_t i) {
 }
 __device__ void store(std::byte *p, llaisysDataType_t type, size_t i, float x) {
     if (type == LLAISYS_DTYPE_F32) reinterpret_cast<float *>(p)[i] = x;
-    else reinterpret_cast<uint16_t *>(p)[i] = type == LLAISYS_DTYPE_F16 ? float_to_half(x) : uint16_t(__float_as_uint(x) >> 16);
+    else if (type == LLAISYS_DTYPE_F16) reinterpret_cast<uint16_t *>(p)[i] = float_to_half(x);
+    else {
+        const uint32_t bits = __float_as_uint(x);
+        const uint32_t round = 0x7fff + ((bits >> 16) & 1);
+        reinterpret_cast<uint16_t *>(p)[i] = uint16_t((bits + round) >> 16);
+    }
 }
 __global__ void add_k(std::byte *o,const std::byte*a,const std::byte*b,llaisysDataType_t t,size_t n){size_t i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n)store(o,t,i,load(a,t,i)+load(b,t,i));}
 __global__ void embed_k(std::byte*o,const int64_t*id,const std::byte*w,llaisysDataType_t t,size_t n,size_t d){size_t i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n){size_t r=i/d;store(o,t,i,load(w,t,size_t(id[r])*d+i%d));}}
